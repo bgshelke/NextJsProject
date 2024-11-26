@@ -1,0 +1,650 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum TransactionType {
+  WALLET
+}
+
+enum Transaction {
+  CREDIT
+  DEBIT
+  FAILED
+}
+
+enum NotificationType {
+  ORDER
+  SUBSCRIPTION
+  ACCOUNT
+  OFFER
+  PROMO
+  WALLET
+  TRANSACTION
+  DELIVERY
+  FEEDBACK
+  SURVEY
+  OTHER
+}
+
+enum OrderStatus {
+  ACTIVE
+  CANCELLED
+  COMPLETED
+  ON_HOLD
+  UPCOMING
+  REFUNDED
+}
+
+enum SubOrderStatus {
+  ACCEPTED
+  PREPARING
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+  SKIPPED
+  REFUNDED
+}
+
+enum PickupOrderStatus {
+  ACCEPTED
+  PREPARING
+  READY
+  PICKED_UP
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PAID
+  PENDING
+  FAILED
+}
+
+enum PlanType {
+  ONETIME
+  SUBSCRIPTION
+}
+
+enum PlanName {
+  CURRY
+  MEAL
+}
+
+enum UnitType {
+  OZ
+  PCS
+}
+
+enum OrderType {
+  ORDERNOW
+  SCHEDULED
+}
+
+enum MealPreference {
+  VEG
+  NON_VEG
+}
+
+enum AddressType {
+  HOME
+  WORK
+}
+
+enum PickupOption {
+  PICKUP
+  DELIVERY
+}
+
+enum Permission {
+  READ
+  WRITE
+  DELETE
+  UPDATE
+}
+
+// // // IGNORE
+model Account {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String   @db.ObjectId
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?  @db.String
+  access_token      String?  @db.String
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?  @db.String
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+// // // IGNORE
+model Session {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  sessionToken String   @unique
+  userId       String   @db.ObjectId
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// // // USER SCHEMA
+model User {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  isVerified    Boolean   @default(false)
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  role          Role      @default(CUSTOMER)
+  customer      Customer?
+  admin         Admin?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt 
+}
+
+// // //DONE
+model Customer {
+  id                     String               @id @default(auto()) @map("_id") @db.ObjectId
+  firstName              String?
+  lastName               String?
+  email                  String               @unique
+  password               String?
+  googleId               String?              @unique
+  appleId                String?              @unique
+  phone                  String?
+  wallet                 Float                @default(0)
+  transactionHistory     TransactionHistory[]
+  orders                 Order[]
+  subscriptions          Subscription[]
+  notifications          Notification[]
+  userId                 String               @unique @db.ObjectId
+  customerUniqueId       String               @unique
+  user                   User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  savedAddresses         SavedAddress[]
+  userPreference         UserPreference?
+  resetPasswordToken     String?
+  resetPasswordExpiresAt DateTime?
+  stripeCustomer         String?              @unique
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  PreferenceOrder        PreferenceOrder?
+}
+
+model EmailVerification {
+  id      String   @id @default(auto()) @map("_id") @db.ObjectId
+  email   String   @unique
+  token   String
+  expires DateTime
+}
+
+model VerificationToken {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// // // DONE
+model Admin {
+  id          String       @id @default(auto()) @map("_id") @db.ObjectId
+  firstName   String
+  lastName    String
+  email       String       @unique
+  password    String
+  isVerified  Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  permissions Permission[] @default([READ])
+  userId      String       @unique @db.ObjectId
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model InviteAdminUser {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String   @unique
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Subscription {
+  id                   String           @id @default(auto()) @map("_id") @db.ObjectId
+  isActive             Boolean          @default(false)
+  customer             Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId           String           @unique @db.ObjectId
+  orders               Order[]
+  firstDeliveryDate    DateTime         @unique
+  subscriptionStripeId String           @unique
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  stripePriceId        String?
+  PreferenceOrder      PreferenceOrder?
+}
+
+model ShippingInfo {
+  id                   String         @id @default(auto()) @map("_id") @db.ObjectId
+  fullName             String
+  addressLine1         String
+  addressLine2         String?
+  phone                String
+  city                 String
+  state                String
+  zipCode              String
+  country              String         @default("US")
+  deliveryInstructions String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  SavedAddress         SavedAddress[]
+  savedAddressId       String?        @db.ObjectId
+}
+
+model BillingInfo {
+  id             String         @id @default(auto()) @map("_id") @db.ObjectId
+  fullName       String
+  addressLine1   String
+  addressLine2   String?
+  city           String
+  state          String
+  zipCode        String
+  country        String         @default("US")
+  SavedAddress   SavedAddress[]
+  savedAddressId String?        @db.ObjectId
+}
+
+model SavedAddress {
+  id             String        @id @default(auto()) @map("_id") @db.ObjectId
+  customerId     String        @unique @db.ObjectId
+  shippingInfo   ShippingInfo? @relation(fields: [shippingInfoId], references: [id], onDelete: Cascade)
+  billingInfo    BillingInfo?  @relation(fields: [billingInfoId], references: [id], onDelete: Cascade)
+  isDefault      Boolean       @default(false)
+  addressType    AddressType   @default(HOME)
+  shippingInfoId String?       @db.ObjectId
+  billingInfoId  String?       @db.ObjectId
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  customer       Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model Order {
+  id                String       @id @default(auto()) @map("_id") @db.ObjectId
+  customer          Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId        String       @unique @db.ObjectId
+  orderID           String       @unique
+  subOrders         SubOrders[]
+  dabbah            Dabbah?
+  pickupOrder       PickupOrder?
+  deliveryFees      Float
+  firstDeliveryDate DateTime?
+  planType          PlanType
+  paidAmount           Float
+  deliveryInstructions String?
+  totalAmount          Float
+  skippedAmount        Float?
+  invoiceId            String?       @unique
+  billingInfo          Json?
+  shippingInfo         Json?
+  status               OrderStatus   @default(ACTIVE)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  couponCode           CouponCode?   @relation(fields: [couponCodeId], references: [id])
+  couponCodeId         String?       @db.ObjectId
+  orderStripeId        String?       @unique
+  subscriptionId       String?       @unique @db.ObjectId
+  subscription         Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+}
+
+model PreferenceOrder {
+  id                  String               @id @default(auto()) @map("_id") @db.ObjectId
+  customer            Customer             @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId          String               @unique @db.ObjectId
+  preferenceSubOrders PreferenceSubOrder[]
+  subscriptionId      String?              @unique @db.ObjectId
+  subscription        Subscription?        @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  billingInfo         Json?
+  shippingInfo        Json?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+}
+
+model PreferenceSubOrder {
+  id                String          @id @default(auto()) @map("_id") @db.ObjectId
+  preferenceOrder   PreferenceOrder @relation(fields: [preferenceOrderId], references: [id], onDelete: Cascade)
+  preferenceOrderId String          @db.ObjectId
+  items             OrderItem[]
+  timeSlotStart     String
+  timeSlotEnd       String
+  weekDay           String          @unique
+  isSkipped         Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+}
+
+model SubOrders {
+  id            String         @id @default(auto()) @map("_id") @db.ObjectId
+  order         Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId       String         @db.ObjectId
+  subOrderID    String         @unique
+  items         OrderItem[]
+  timeSlotStart String
+  timeSlotEnd   String
+  total         Float
+  deliveryDate  DateTime
+  status        SubOrderStatus @default(ACCEPTED)
+  thumbnail     String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Dabbah {
+  id            String         @id @default(auto()) @map("_id") @db.ObjectId
+  order         Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId       String         @unique @db.ObjectId
+  dabbahID      String         @unique
+  items         OrderItem[]
+  timeSlotStart String
+  timeSlotEnd   String
+  deliveryDate  DateTime
+  total         Float
+  orderType     OrderType
+  status        SubOrderStatus @default(ACCEPTED)
+  thumbnail     String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model PickupOrder {
+  id         String            @id @default(auto()) @map("_id") @db.ObjectId
+  order      Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId    String            @unique @db.ObjectId
+  dabbahID   String            @unique
+  items      OrderItem[]
+  pickupTime String
+  pickupDate DateTime
+  orderType  OrderType
+  total      Float
+  status     PickupOrderStatus @default(ACCEPTED)
+  thumbnail  String?
+  kitchen    Kitchen?          @relation(fields: [kitchenId], references: [id])
+  kitchenId  String?           @db.ObjectId
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+}
+
+model Item {
+  id             String         @id @default(auto()) @map("_id") @db.ObjectId
+  itemName       String         @unique
+  price          Float
+  unit           Float
+  unitType       UnitType
+  planType       PlanName[]
+  mealPreference MealPreference @default(VEG)
+  thumbnail      String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  deletedAt      DateTime?
+  orderItems     OrderItem[]
+  menuItem       MenuItem[]
+}
+
+model OrderItem {
+  id                   String              @id @default(auto()) @map("_id") @db.ObjectId
+  item                 Item                @relation(fields: [itemId], references: [id])
+  itemId               String              @unique @db.ObjectId
+  quantity             Int                 @default(0)
+  itemPrice            Float               @default(0)
+  refundQuantity       Int                 @default(0)
+  subOrder             SubOrders?          @relation(fields: [subOrderId], references: [id], onDelete: Cascade)
+  dabbah               Dabbah?             @relation(fields: [dabbahId], references: [id], onDelete: Cascade)
+  pickupOrder          PickupOrder?        @relation(fields: [pickupOrderId], references: [id], onDelete: Cascade)
+  guestDabbah          GuestDabbah?        @relation(fields: [guestDabbahId], references: [id], onDelete: Cascade)
+  guestPickupOrder     GuestPickupOrder?   @relation(fields: [guestPickupOrderId], references: [id], onDelete: Cascade)
+  subOrderId           String?             @db.ObjectId
+  dabbahId             String?             @db.ObjectId
+  pickupOrderId        String?             @db.ObjectId
+  guestDabbahId        String?             @db.ObjectId
+  guestPickupOrderId   String?             @db.ObjectId
+  PreferenceSubOrder   PreferenceSubOrder? @relation(fields: [preferenceSubOrderId], references: [id])
+  preferenceSubOrderId String?             @db.ObjectId
+}
+
+// ///Guest Checkout
+
+model GuestOrder {
+  id                   String            @id @default(auto()) @map("_id") @db.ObjectId
+  orderID              String            @unique
+  guestDabbah          GuestDabbah?
+  guestPickupOrder     GuestPickupOrder?
+  deliveryFees         Float
+  firstDeliveryDate    DateTime?
+  planType             PlanType
+  paidAmount           Float
+  deliveryInstructions String?
+  totalAmount          Float
+  billingInfo          Json?
+  shippingInfo         Json?
+  status               OrderStatus       @default(ACTIVE)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  couponCode           CouponCode?       @relation(fields: [couponCodeId], references: [id])
+  couponCodeId         String?           @db.ObjectId
+  stripeOrderId        String?           @unique
+  stripeSubscriptionId String?           @unique
+}
+
+model GuestDabbah {
+  id            String         @id @default(auto()) @map("_id") @db.ObjectId
+  order         GuestOrder     @relation(fields: [orderId], references: [id])
+  orderId       String         @unique @db.ObjectId
+  dabbahID      String         @unique
+  items         OrderItem[]
+  timeSlotStart String
+  timeSlotEnd   String
+  deliveryDate  DateTime
+  total         Float
+  orderType     OrderType
+  status        SubOrderStatus @default(ACCEPTED)
+  thumbnail     String?        @default("")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model GuestPickupOrder {
+  id         String            @id @default(auto()) @map("_id") @db.ObjectId
+  order      GuestOrder        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId    String            @unique @db.ObjectId
+  dabbahID   String            @unique
+  items      OrderItem[]
+  pickupTime String
+  pickupDate DateTime
+  total      Float
+  orderType  OrderType
+  status     PickupOrderStatus @default(ACCEPTED)
+  thumbnail  String?           @default("")
+  kitchen    Kitchen?          @relation(fields: [kitchenId], references: [id])
+  kitchenId  String?           @db.ObjectId
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+}
+
+model Notification {
+  id         String           @id @default(auto()) @map("_id") @db.ObjectId
+  title      String
+  message    String
+  type       NotificationType
+  isRead     Boolean          @default(false)
+  customerId String           @unique @db.ObjectId
+  customer   Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+}
+
+model UserWithDifferentDeliveryArea {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String   @unique
+  address   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SavedAreas {
+  id           String @id @default("dwArea") @map("_id")
+  polygonPaths Json
+}
+
+model UserPreference {
+  id                   String   @id @default(auto()) @map("_id") @db.ObjectId
+  customerId           String   @unique @db.ObjectId
+  customer             Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  weeklyMealCustomize  Boolean  @default(true)
+  weeklyMenuUpdates    Boolean  @default(true)
+  promoAndOffers       Boolean  @default(true)
+  walletUpdates        Boolean  @default(true)
+  orderUpdates         Boolean  @default(true)
+  giftCardUpdates      Boolean  @default(true)
+  feedback             Boolean  @default(true)
+  marketingEmails      Boolean  @default(true)
+  newsAndAnnouncements Boolean  @default(true)
+  deliveryUpdate       Boolean  @default(true)
+  subscriptionUpdates  Boolean  @default(true)
+  surveyUpdates        Boolean  @default(true)
+  SMSNotification      Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model TimeSlots {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  timeStart String   @unique
+  timeEnd   String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OpenHours {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  day       String  @unique
+  openTime  String
+  closeTime String
+  isClosed  Boolean @default(false)
+}
+
+model Kitchen {
+  id               String             @id @default(auto()) @map("_id") @db.ObjectId
+  name             String
+  address          String             @unique
+  phone            String
+  email            String
+  isDefault        Boolean            @default(false)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  PickupOrder      PickupOrder[]
+  guestPickupOrder GuestPickupOrder[]
+}
+
+model DwConfig {
+  id                          String   @id @default(auto()) @map("_id") @db.ObjectId
+  uniqueKey                   String   @unique @default("dwsettings")
+  deliveryFees                Int      @default(5)
+  maxAmountForFreeDelivery    Int      @default(100)
+  timeForPreparing            Int      @default(4)
+  disableActionAndEmailToSend Int      @default(12)
+  minQtyOfItem                Int      @default(1)
+  maxQtyOfItem                Int      @default(8)
+  timeToStopAction            String   @default("20:00")
+  menuLoop                    Int      @default(5)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+}
+
+model TransactionHistory {
+  id              String          @id @default(auto()) @map("_id") @db.ObjectId
+  customer        Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  transactionId   String          @unique
+  customerId      String          @db.ObjectId
+  amount          Float
+  type            Transaction
+  transactionType TransactionType
+  description     String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model DailyMenu {
+  id          String                @id @default(auto()) @map("_id") @db.ObjectId
+  date        DateTime              @unique
+  thumbnail   String?
+  menuItems   MenuItemOnDailyMenu[]
+  description String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+}
+
+model MenuItem {
+  id         String                @id @default(auto()) @map("_id") @db.ObjectId
+  name       String
+  item       Item                  @relation(fields: [itemId], references: [id])
+  itemId     String                @db.ObjectId
+  dailyMenus MenuItemOnDailyMenu[]
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+}
+
+model MenuItemOnDailyMenu {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  menuItem    MenuItem  @relation(fields: [menuItemId], references: [id])
+  menuItemId  String    @unique @db.ObjectId
+  dailyMenu   DailyMenu @relation(fields: [dailyMenuId], references: [id])
+  dailyMenuId String    @unique @db.ObjectId
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model CouponCode {
+  id                 String         @id @default(auto()) @map("_id") @db.ObjectId
+  code               String         @unique
+  discountAmount     Float?
+  discountPercentage Float?
+  maxUsageLimit      Int?
+  usageCount         Int            @default(0)
+  expirationDate     DateTime?
+  addressUsage       AddressUsage[]
+  addressUsageLimit  Int?           @default(1)
+  isActive           Boolean        @default(true)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  orders             Order[]
+  guestOrders        GuestOrder[]
+}
+
+model AddressUsage {
+  id                String     @id @default(auto()) @map("_id") @db.ObjectId
+  address           String     @unique
+  addressUsageCount Int?       @default(0)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  couponCode        CouponCode @relation(fields: [couponCodeId], references: [id], onDelete: Cascade)
+  couponCodeId      String     @db.ObjectId
+}
